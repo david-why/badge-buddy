@@ -7,9 +7,9 @@ class Image:
         0x03
     )
     __IMAGE_NAMES = (
-        'happy',
-        'happy',
-        'happy'
+        'emojis/happy',
+        'emojis/happy',
+        'emojis/happy'
     )
     
     __IMAGES_BY_NAME = {

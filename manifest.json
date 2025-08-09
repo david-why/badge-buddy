@@ -1,5 +1,6 @@
 {
     "displayName": "Buddy",
+    "logoPath": "assets/logo.pbm",
     "permissions": [],
     "appNumber": 13639
 }
