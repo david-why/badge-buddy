@@ -1,10 +1,13 @@
-import badge
 import time
-from badge.input import Buttons
-from machine import unique_id
 
 if 0:
     from internal_os.hardware.radio import Packet
+    
+import badge
+from badge.input import Buttons
+from machine import unique_id
+
+from .image import Image
 
 ICON_LOCATIONS = [
     (44, 1),
@@ -19,6 +22,7 @@ ICON_LOCATIONS = [
     (183, 111),
     (183, 149),
 ]
+
 ICON_BUTTONS = [
     Buttons.SW15,
     Buttons.SW8,
@@ -32,22 +36,7 @@ ICON_BUTTONS = [
     Buttons.SW6,
     Buttons.SW14,
 ]
-ICON_NAMES = [
-    'happy',
-    'happy',
-    'happy',
-    'happy',
-    'happy',
-    'happy',
-    'happy',
-    'happy',
-    'happy',
-    'happy',
-    'happy',
-]
-ICON_IMAGES = [
-    badge.display.import_pbm(f'/apps/radar/assets/{name}.pbm') for name in ICON_NAMES
-]
+
 ICON_COUNT = len(ICON_LOCATIONS)
 
 MESSAGE_LIMIT = 15
@@ -123,7 +112,7 @@ class App(badge.BaseApp):
     # views
 
     def display(self):
-        if self.contact_id is None:
+        if False:
             self.display_no_contact()
         else:
             self.display_messaging()
@@ -147,13 +136,10 @@ class App(badge.BaseApp):
         badge.display.rect(20, 20, 160, 160, 0)
         for i in range(ICON_COUNT):
             x, y = ICON_LOCATIONS[i]
-            self.draw_icon(i, x, y)
+            Image.draw_image_name("happy", x, y)
 
     # components
-
-    def draw_icon(self, icon: int, x: int, y: int):
-        badge.display.blit(ICON_IMAGES[icon], x, y)
-
+    
     # uart
 
     def uart_read_blocking(self, num_bytes: int, timeout: int = 5) -> bytes:
