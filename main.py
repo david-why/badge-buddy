@@ -24,13 +24,13 @@ IMAGE_BUTTONS = [
 
 ICON_COUNT = len(IMAGE_BUTTONS)
 
-BADGE_ID = int.from_bytes(unique_id()[-2:], 'big')
+BADGE_ID = int.from_bytes(unique_id()[-2:], "big")
 MESSAGE_COUNT_LIMIT = 15
 MESSAGE_EMOJI_LIMIT = 8
 
 
 class Message:
-    __slots__ = ('from_id', 'to_id', 'content')
+    __slots__ = ("from_id", "to_id", "content")
 
     def __init__(self, from_id: int, to_id: int, content: list[int]):
         self.from_id = from_id
@@ -80,7 +80,7 @@ class App(badge.BaseApp):
                 badge.uart.send(unique_id()[-2:])
                 self.wrote_id = True
 
-            badge_id = int.from_bytes(self.uart_read_blocking(2), 'big')
+            badge_id = int.from_bytes(self.uart_read_blocking(2), "big")
             self.contact_id = badge_id
             with open(badge.utils.get_data_dir() + "/contact_id.txt", "w") as f:
                 f.write(str(self.contact_id))
@@ -222,7 +222,7 @@ class App(badge.BaseApp):
 
     def uart_read_blocking(self, num_bytes: int, timeout: int = 5) -> bytes:
         start_time = badge.time.monotonic()
-        data = b''
+        data = b""
         while True:
             data += badge.uart.receive(num_bytes - len(data))
             if len(data) >= num_bytes:
@@ -265,12 +265,12 @@ class App(badge.BaseApp):
         try:
             with open(badge.utils.get_data_dir() + "/messages.txt", "r") as f:
                 for line in f:
-                    parts = line.strip().split(':')
+                    parts = line.strip().split(":")
                     if len(parts) != 3:
                         continue
                     from_id = int(parts[0])
                     to_id = int(parts[1])
-                    content = parts[2].split(',')
+                    content = parts[2].split(",")
                     message = Message(from_id, to_id, [int(x) for x in content])
                     self.messages.append(message)
         except:
@@ -290,7 +290,7 @@ class App(badge.BaseApp):
         try:
             with open(badge.utils.get_data_dir() + "/messages.txt", "w") as f:
                 for message in self.messages:
-                    line = f"{message.from_id}:{message.to_id}:{','.join(map(str, message.content))}\n"
+                    line = f"{message.from_id}:{message.to_id}:{",".join(map(str, message.content))}\n"
                     f.write(line)
         except Exception as e:
             print("Error saving messages:", e)

@@ -15,21 +15,21 @@ class Image:
         0x0B
     )
     __IMAGE_NAMES = (
-        'emojis/happy',
-        'emojis/happy',
-        'emojis/happy',
-        'emojis/happy',
-        'emojis/happy',
-        'emojis/happy',
-        'emojis/happy',
-        'emojis/happy',
-        'emojis/happy',
-        'emojis/happy',
-        'emojis/happy'
+        "emojis/happy",
+        "emojis/happy",
+        "emojis/happy",
+        "emojis/happy",
+        "emojis/happy",
+        "emojis/happy",
+        "emojis/happy",
+        "emojis/happy",
+        "emojis/happy",
+        "emojis/happy",
+        "emojis/happy"
     )
     
     __IMAGES_BY_NAME = {
-        name.lower(): badge.display.import_pbm(f'/apps/Buddy/assets/{name}.pbm') for name in __IMAGE_NAMES
+        name.lower(): badge.display.import_pbm(f"/apps/Buddy/assets/{name}.pbm") for name in __IMAGE_NAMES
     }
     
     __CODE_TO_NAME = {
