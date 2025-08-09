@@ -8,36 +8,23 @@ from badge.input import Buttons
 from machine import unique_id
 
 from .image import Image
+from .image_button import ImageButton
 
-ICON_LOCATIONS = [
-    (44, 1),
-    (92, 1),
-    (140, 1),
-    (1, 35),
-    (1, 73),
-    (1, 111),
-    (1, 149),
-    (183, 35),
-    (183, 73),
-    (183, 111),
-    (183, 149),
+IMAGE_BUTTONS = [
+    ImageButton(Buttons.SW15, 1, 44, 1),
+    ImageButton(Buttons.SW8, 2, 92, 1),
+    ImageButton(Buttons.SW16, 3, 140, 1),
+    ImageButton(Buttons.SW5, 4, 1, 35),
+    ImageButton(Buttons.SW18, 5, 1, 73),
+    ImageButton(Buttons.SW10, 6, 1, 111),
+    ImageButton(Buttons.SW17, 7, 1, 149),
+    ImageButton(Buttons.SW7, 8, 183, 35),
+    ImageButton(Buttons.SW13, 9, 183, 73),
+    ImageButton(Buttons.SW6, 10, 183, 111),
+    ImageButton(Buttons.SW14, 11, 183, 149),
 ]
 
-ICON_BUTTONS = [
-    Buttons.SW15,
-    Buttons.SW8,
-    Buttons.SW16,
-    Buttons.SW5,
-    Buttons.SW18,
-    Buttons.SW10,
-    Buttons.SW17,
-    Buttons.SW7,
-    Buttons.SW13,
-    Buttons.SW6,
-    Buttons.SW14,
-]
-
-ICON_COUNT = len(ICON_LOCATIONS)
+ICON_COUNT = len(IMAGE_BUTTONS)
 
 MESSAGE_LIMIT = 15
 
@@ -59,7 +46,7 @@ class App(badge.BaseApp):
                 self.contact_id = int(f.read())
         except:
             self.contact_id = None
-        self.queued_emojis: list[str] = []
+        self.queued_emojis: list[int] = []
         self.needs_update = True
         self.wrote_id = False
 
@@ -93,19 +80,17 @@ class App(badge.BaseApp):
 
     def handle_messaging(self):
         assert self.contact_id is not None
-        for button in ICON_BUTTONS:
-            if badge.input.get_button(button):
-                icon_index = ICON_BUTTONS.index(button)
-                self.queued_emojis.append(ICON_NAMES[icon_index])
+        for button in IMAGE_BUTTONS:
+            if badge.input.get_button(button.button_code):
+                self.queued_emojis.append(button.image_code)
 
         if badge.input.get_button(Buttons.SW4):
             if self.queued_emojis:
                 packet_data = bytearray()
                 packet_data.append(0x01)  # message packet
                 packet_data.append(len(self.queued_emojis))
-                for emoji in self.queued_emojis:
-                    emoji_index = ICON_NAMES.index(emoji)
-                    packet_data.append(emoji_index)
+                for emoji_code in self.queued_emojis:
+                    packet_data.append(emoji_code)
                 badge.radio.send_packet(self.contact_id, packet_data)
                 self.queued_emojis.clear()
 
@@ -135,7 +120,7 @@ class App(badge.BaseApp):
         badge.display.fill(1)
         badge.display.rect(20, 20, 160, 160, 0)
         for i in range(ICON_COUNT):
-            x, y = ICON_LOCATIONS[i]
+            x, y = IMAGE_BUTTONS[i].x, IMAGE_BUTTONS[i].y
             Image.draw_image_name("happy", x, y)
 
     # components
