@@ -55,15 +55,22 @@ class App(badge.BaseApp):
         self.needs_update = True
         self.wrote_id = False
         self._load_messages()
+        self.error_msg_shown = False
 
     def loop(self) -> None:
-        if self.needs_update:
-            self.display()
-            self.needs_update = False
-        if self.contact_id is None:
-            self.handle_no_contact()
-        else:
-            self.handle_messaging()
+        if self.error_msg_shown:
+            return
+        
+        try:
+            if self.needs_update:
+                self.display()
+                self.needs_update = False
+            if self.contact_id is None:
+                self.handle_no_contact()
+            else:
+                self.handle_messaging()
+        except Exception as e:
+            self.show_error_msg(e)
 
     # logic
 
@@ -164,6 +171,36 @@ class App(badge.BaseApp):
             y_offset -= 18
             if y_offset < 22:
                 break
+            
+    def show_error_msg(self, e: Exception) -> None:
+        self.error_msg_shown = True
+        
+        CHARS_PER_LINE = 25
+        LINE_HEIGHT = 8
+        
+        badge.display.fill(1)
+        
+        msg = str(e)
+        lines = (
+            [
+                "Unexpected error occured:",
+                ""
+            ] +
+            [msg[i:i+CHARS_PER_LINE] for i in range(0, len(msg), CHARS_PER_LINE)] +
+            [
+                "",
+                "Restart the app and",
+                "report this to the devs!",
+                "",
+                "@jollyroger182",
+                "@Brooklyn Baylis"
+            ]
+        )
+
+        for i, line in enumerate(lines):
+            badge.display.text(line, 0, i * LINE_HEIGHT)
+        
+        badge.display.show()
 
     # components
 
