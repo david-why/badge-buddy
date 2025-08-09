@@ -50,6 +50,7 @@ class App(badge.BaseApp):
         except:
             self.contact_id = None
         self.queued_emojis: list[int] = []
+        self.message_update_time: float | None = None
         self.keys_down: set[int] = set()
         self.needs_update = True
         self.wrote_id = False
@@ -90,8 +91,9 @@ class App(badge.BaseApp):
                 if button.button_code in self.keys_down:
                     continue
                 self.keys_down.add(button.button_code)
-                if len(self.queued_emojis) < MESSAGE_EMOJI_LIMIT - 1:
+                if len(self.queued_emojis) < MESSAGE_EMOJI_LIMIT:
                     self.queued_emojis.append(button.image_code)
+                    self.message_update_time = badge.time.monotonic()
             else:
                 self.keys_down.discard(button.button_code)
 
@@ -110,6 +112,11 @@ class App(badge.BaseApp):
         if badge.input.get_button(Buttons.SW11):
             if self.queued_emojis:
                 self.queued_emojis.pop()
+                
+        if self.message_update_time is not None:
+            if badge.time.monotonic() - self.message_update_time > 1:
+                self.needs_update = True
+                self.message_update_time = None
 
     # views
 
@@ -142,25 +149,35 @@ class App(badge.BaseApp):
 
         # display messages
         y_offset = 160
+        if self.queued_emojis:
+            self.draw_message(self.queued_emojis, "center", y_offset)
+            y_offset -= 54
         for message in reversed(self.messages):
             self.logger.debug(
                 f"Drawing message from {message.from_id} with content {message.content} at {y_offset}"
             )
-            self.draw_message(message, y_offset)
+            self.draw_message(
+                message.content,
+                "right" if message.from_id == BADGE_ID else "left",
+                y_offset,
+            )
             y_offset -= 18
             if y_offset < 22:
                 break
 
     # components
 
-    def draw_message(self, message: Message, y_offset: int) -> None:
-        if not message.content:
+    def draw_message(self, emojis: list[int], alignment: str, y_offset: int) -> None:
+        if not emojis:
             return
-        is_self = message.from_id == BADGE_ID
-        width = 18 * len(message.content) - 2
-        x = 24 if not is_self else 176 - width
+        width = 18 * len(emojis) - 2
+        x = (
+            24
+            if alignment == "left"
+            else 176 - width if alignment == "right" else 100 - width // 2
+        )
 
-        for i, emoji_code in enumerate(message.content):
+        for i, emoji_code in enumerate(emojis):
             x_offset = x + i * 18
             Image.draw_image_code(emoji_code, x_offset, y_offset)
 
