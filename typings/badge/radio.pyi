@@ -1,0 +1,3 @@
+from internal_os.hardware.radio import Packet as Packet
+
+def send_packet(dest: int, data: bytes) -> None: ...
