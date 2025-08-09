@@ -1,10 +1,8 @@
 import time
 
-if 0:
-    from internal_os.hardware.radio import Packet
-    
 import badge
 from badge.input import Buttons
+from badge.radio import Packet
 from machine import unique_id
 
 from .image import Image
@@ -26,13 +24,15 @@ IMAGE_BUTTONS = [
 
 ICON_COUNT = len(IMAGE_BUTTONS)
 
-MESSAGE_LIMIT = 15
+BADGE_ID = int.from_bytes(unique_id()[-2:], 'big')
+MESSAGE_COUNT_LIMIT = 15
+MESSAGE_EMOJI_LIMIT = 8
 
 
 class Message:
     __slots__ = ('from_id', 'to_id', 'content')
 
-    def __init__(self, from_id: int, to_id: int, content: list[str]):
+    def __init__(self, from_id: int, to_id: int, content: list[int]):
         self.from_id = from_id
         self.to_id = to_id
         self.content = content
@@ -40,6 +40,9 @@ class Message:
 
 class App(badge.BaseApp):
     def on_open(self) -> None:
+        self.init()
+
+    def init(self) -> None:
         self.messages: list[Message] = []
         try:
             with open(badge.utils.get_data_dir() + "/contact_id.txt", "r") as f:
@@ -47,8 +50,10 @@ class App(badge.BaseApp):
         except:
             self.contact_id = None
         self.queued_emojis: list[int] = []
+        self.keys_down: set[int] = set()
         self.needs_update = True
         self.wrote_id = False
+        self._load_messages()
 
     def loop(self) -> None:
         if self.needs_update:
@@ -82,22 +87,34 @@ class App(badge.BaseApp):
         assert self.contact_id is not None
         for button in IMAGE_BUTTONS:
             if badge.input.get_button(button.button_code):
-                self.queued_emojis.append(button.image_code)
+                if button.button_code in self.keys_down:
+                    continue
+                self.keys_down.add(button.button_code)
+                if len(self.queued_emojis) < MESSAGE_EMOJI_LIMIT - 1:
+                    self.queued_emojis.append(button.image_code)
+            else:
+                self.keys_down.discard(button.button_code)
 
-        if badge.input.get_button(Buttons.SW4):
+        # send message
+        if badge.input.get_button(Buttons.SW5):
             if self.queued_emojis:
-                packet_data = bytearray()
-                packet_data.append(0x01)  # message packet
-                packet_data.append(len(self.queued_emojis))
+                packet_data = bytes([0x01, len(self.queued_emojis)])
                 for emoji_code in self.queued_emojis:
-                    packet_data.append(emoji_code)
+                    packet_data += bytes([emoji_code])
                 badge.radio.send_packet(self.contact_id, packet_data)
+                message = Message(BADGE_ID, self.contact_id, self.queued_emojis.copy())
+                self.add_message(message)
                 self.queued_emojis.clear()
+
+        # backspace
+        if badge.input.get_button(Buttons.SW11):
+            if self.queued_emojis:
+                self.queued_emojis.pop()
 
     # views
 
     def display(self):
-        if False:
+        if self.contact_id is None:
             self.display_no_contact()
         else:
             self.display_messaging()
@@ -119,12 +136,34 @@ class App(badge.BaseApp):
     def display_messaging(self):
         badge.display.fill(1)
         badge.display.rect(20, 20, 160, 160, 0)
-        for i in range(ICON_COUNT):
-            x, y = IMAGE_BUTTONS[i].x, IMAGE_BUTTONS[i].y
-            Image.draw_image_name("happy", x, y)
+        for button in IMAGE_BUTTONS:
+            x, y = button.x, button.y
+            Image.draw_image_code(button.image_code, x, y)
+
+        # display messages
+        y_offset = 160
+        for message in reversed(self.messages):
+            self.logger.debug(
+                f"Drawing message from {message.from_id} with content {message.content} at {y_offset}"
+            )
+            self.draw_message(message, y_offset)
+            y_offset -= 18
+            if y_offset < 22:
+                break
 
     # components
-    
+
+    def draw_message(self, message: Message, y_offset: int) -> None:
+        if not message.content:
+            return
+        is_self = message.from_id == BADGE_ID
+        width = 18 * len(message.content) - 2
+        x = 24 if not is_self else 176 - width
+
+        for i, emoji_code in enumerate(message.content):
+            x_offset = x + i * 18
+            Image.draw_image_code(emoji_code, x_offset, y_offset)
+
     # uart
 
     def uart_read_blocking(self, num_bytes: int, timeout: int = 5) -> bytes:
@@ -135,15 +174,19 @@ class App(badge.BaseApp):
             if len(data) >= num_bytes:
                 return data
             if badge.time.monotonic() - start_time > timeout:
-                raise TimeoutError("Timeout waiting for UART data")
+                raise RuntimeError("Timeout waiting for UART data")
             time.sleep(0.01)
 
     # radio
 
     def on_packet(self, packet: Packet, in_foreground: bool) -> None:
         data = packet.data
+        if not in_foreground:
+            self.init()
         if packet.source != self.contact_id:
-            self.logger.warning(f"Ignoring packet from unknown source {hex(packet.source)}")
+            self.logger.warning(
+                f"Ignoring packet from unknown source {hex(packet.source)}"
+            )
             return
         if data[0] == 0x01:
             # message packet
@@ -151,26 +194,49 @@ class App(badge.BaseApp):
             emojis = []
             for i in range(num_emojis):
                 emoji_index = data[2 + i]
-                emoji_name = ICON_NAMES[emoji_index]
-                emojis.append(emoji_name)
+                emojis.append(emoji_index)
             message = Message(packet.source, packet.dest, emojis)
             self.add_message(message)
+            badge.buzzer.tone(880, 0.1)
+            time.sleep(0.05)
+            badge.buzzer.tone(880, 0.1)
+            time.sleep(0.05)
+            badge.buzzer.tone(880, 0.1)
             if in_foreground:
                 self.needs_update = True
 
     # storage
 
+    def _load_messages(self) -> None:
+        try:
+            with open(badge.utils.get_data_dir() + "/messages.txt", "r") as f:
+                for line in f:
+                    parts = line.strip().split(':')
+                    if len(parts) != 3:
+                        continue
+                    from_id = int(parts[0])
+                    to_id = int(parts[1])
+                    content = parts[2].split(',')
+                    message = Message(from_id, to_id, [int(x) for x in content])
+                    self.messages.append(message)
+        except:
+            pass
+
     def add_message(self, message: Message) -> None:
         self.messages.append(message)
-        if len(self.messages) > MESSAGE_LIMIT:
+        if len(self.messages) > MESSAGE_COUNT_LIMIT:
             self.messages.pop(0)
         self._save_messages()
+        self.logger.info(
+            f"Added message from {message.from_id} to {message.to_id} with content {message.content}"
+        )
+        self.needs_update = True
 
     def _save_messages(self) -> None:
         try:
             with open(badge.utils.get_data_dir() + "/messages.txt", "w") as f:
                 for message in self.messages:
-                    line = f"{message.from_id}:{message.to_id}:{','.join(message.content)}\n"
+                    line = f"{message.from_id}:{message.to_id}:{','.join(map(str, message.content))}\n"
                     f.write(line)
         except Exception as e:
             print("Error saving messages:", e)
