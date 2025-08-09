@@ -12,20 +12,33 @@ class Image:
         0x08,
         0x09,
         0x0A,
-        0x0B
+        0x0B,
+        0xFF,
+        0xFE,
+        0xFD,
+        0xFC,
+        0xFB,
     )
     __IMAGE_NAMES = (
+        "emojis/check",
+        "emojis/cross",
+        "emojis/question",
+        
         "emojis/happy",
-        "emojis/happy",
-        "emojis/happy",
-        "emojis/happy",
-        "emojis/happy",
-        "emojis/happy",
-        "emojis/happy",
-        "emojis/happy",
-        "emojis/happy",
-        "emojis/happy",
-        "emojis/happy"
+        "emojis/sad",
+        "emojis/neutral",
+        "emojis/angry",
+        
+        "emojis/up",
+        "emojis/down",
+        "emojis/left",
+        "emojis/right",
+        
+        "pairing",
+        "icons/home",
+        "icons/send",
+        "icons/back",
+        "icons/unpair",
     )
     
     __IMAGES_BY_NAME = {

@@ -12,7 +12,7 @@ IMAGE_BUTTONS = [
     ImageButton(Buttons.SW15, 1, 44, 1),
     ImageButton(Buttons.SW8, 2, 92, 1),
     ImageButton(Buttons.SW16, 3, 140, 1),
-    ImageButton(Buttons.SW5, 4, 1, 35),
+    ImageButton(Buttons.SW9, 4, 1, 35),
     ImageButton(Buttons.SW18, 5, 1, 73),
     ImageButton(Buttons.SW10, 6, 1, 111),
     ImageButton(Buttons.SW17, 7, 1, 149),
@@ -75,8 +75,9 @@ class App(badge.BaseApp):
     # logic
 
     def handle_no_contact(self):
-        if badge.uart.is_connected():
+        if badge.uart.is_connected() and badge.uart.present():
             if not self.wrote_id:
+                time.sleep(0.5)
                 badge.uart.send(unique_id()[-2:])
                 self.wrote_id = True
 
@@ -93,6 +94,7 @@ class App(badge.BaseApp):
 
     def handle_messaging(self):
         assert self.contact_id is not None
+        should_play_sound = False
         for button in IMAGE_BUTTONS:
             if badge.input.get_button(button.button_code):
                 if button.button_code in self.keys_down:
@@ -101,8 +103,11 @@ class App(badge.BaseApp):
                 if len(self.queued_emojis) < MESSAGE_EMOJI_LIMIT:
                     self.queued_emojis.append(button.image_code)
                     self.message_update_time = badge.time.monotonic()
+                    should_play_sound = True
             else:
                 self.keys_down.discard(button.button_code)
+        if should_play_sound:
+            badge.buzzer.tone(440, 0.05)
 
         # send message
         if badge.input.get_button(Buttons.SW5):
@@ -114,16 +119,28 @@ class App(badge.BaseApp):
                 message = Message(BADGE_ID, self.contact_id, self.queued_emojis.copy())
                 self.add_message(message)
                 self.queued_emojis.clear()
+                self.needs_update = True
+                badge.buzzer.tone(440, 0.05)
 
         # backspace
         if badge.input.get_button(Buttons.SW11):
-            if self.queued_emojis:
-                self.queued_emojis.pop()
-                
+            if Buttons.SW11 not in self.keys_down:
+                self.keys_down.add(Buttons.SW11)
+                if self.queued_emojis:
+                    self.queued_emojis.pop()
+                    self.message_update_time = badge.time.monotonic()
+                    badge.buzzer.tone(440, 0.05)
+        else:
+            self.keys_down.discard(Buttons.SW11)
+
+        # unpair
+        if badge.input.get_button(Buttons.SW12):
+            badge.radio.send_packet(self.contact_id, b'\x02')
+            self.unpair()
+
         if self.message_update_time is not None:
             if badge.time.monotonic() - self.message_update_time > 1:
                 self.needs_update = True
-                self.message_update_time = None
 
     # views
 
@@ -136,23 +153,20 @@ class App(badge.BaseApp):
 
     def display_no_contact(self):
         badge.display.fill(1)
-        # TODO change placeholder
-        badge.display.fill_rect(60, 30, 80, 80, 0)
-        badge.display.rect(20, 120, 65, 40, 0)
-        badge.display.rect(115, 120, 65, 40, 0)
-        badge.display.hline(85, 130, 10, 0)
-        badge.display.hline(85, 140, 10, 0)
-        badge.display.hline(85, 150, 10, 0)
-        badge.display.hline(105, 130, 10, 0)
-        badge.display.hline(105, 140, 10, 0)
-        badge.display.hline(105, 150, 10, 0)
+        Image.draw_image_code(0xFF, 0, 0)
 
     def display_messaging(self):
+        self.message_update_time = None
         badge.display.fill(1)
         badge.display.rect(20, 20, 160, 160, 0)
         for button in IMAGE_BUTTONS:
             x, y = button.x, button.y
             Image.draw_image_code(button.image_code, x, y)
+        Image.draw_image_code(0xFE, 1, 182)  # home
+        Image.draw_image_code(0xFB, 46, 182)  # unpair
+        # Image.draw_image_code(0x01, 92, 182)  # empty
+        Image.draw_image_code(0xFC, 138, 182)  # backspace
+        Image.draw_image_code(0xFD, 183, 182)  # send
 
         # display messages
         y_offset = 160
@@ -258,8 +272,22 @@ class App(badge.BaseApp):
             badge.buzzer.tone(880, 0.1)
             if in_foreground:
                 self.needs_update = True
+        elif data[0] == 0x02:
+            # unpair packet
+            self.logger.info(f"Received unpair request from {hex(packet.source)}")
+            self.unpair()
 
     # storage
+    
+    def unpair(self) -> None:
+        self.contact_id = None
+        self.messages.clear()
+        self._save_messages()
+        self.queued_emojis.clear()
+        self.message_update_time = None
+        with open(badge.utils.get_data_dir() + "/contact_id.txt", "w") as f:
+            f.write("")
+        self.needs_update = True
 
     def _load_messages(self) -> None:
         try:
